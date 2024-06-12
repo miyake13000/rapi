@@ -11,18 +11,14 @@ use rapi::{
     req::{ReqType, Request},
     *, // import some consts
 };
-use simplelog::{Config, LevelFilter, SimpleLogger};
-use std::{mem::size_of, net::UdpSocket, str::FromStr, thread};
+use simplelog::{Config, SimpleLogger};
+use std::{mem::size_of, net::UdpSocket, thread};
 
 const BUF_SIZE: usize = size_of::<Request>();
 
 fn main() -> Result<(), ()> {
     let args = Args::parse();
-    SimpleLogger::init(
-        LevelFilter::from_str(&args.debug).unwrap(),
-        Config::default(),
-    )
-    .unwrap();
+    SimpleLogger::init(args.debug, Config::default()).unwrap();
 
     let mut queue: Vec<i32> = vec![];
     let stream = UdpSocket::bind((BIND_ADDR, args.port)).unwrap();

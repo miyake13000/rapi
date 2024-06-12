@@ -1,5 +1,6 @@
 use clap::Parser;
 use rapi::*; // import some consts
+use simplelog::LevelFilter;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -18,6 +19,6 @@ pub struct Args {
     pub rapid_port: u16,
 
     /// Debug level (One of [Error, Warn, Info, Debug, Trace, Off])
-    #[arg(short = 'd', long, default_value_t = String::from(DEFAULT_DLEVEL))]
-    pub debug: String,
+    #[arg(short = 'd', long, default_value_t = DEFAULT_DLEVEL)]
+    pub debug: LevelFilter,
 }

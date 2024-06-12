@@ -7,11 +7,10 @@ use rapi::{
     req::{ReqType, Request},
     *, // import some consts
 };
-use simplelog::{Config, LevelFilter, SimpleLogger};
+use simplelog::{Config, SimpleLogger};
 use std::{
     mem::size_of,
     net::UdpSocket,
-    str::FromStr,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -36,11 +35,7 @@ const FIRST_REQ: Request = Request {
 fn main() {
     let args = Args::parse();
     let count_in_communication = Arc::new(AtomicU32::new(0));
-    SimpleLogger::init(
-        LevelFilter::from_str(&args.debug).unwrap(),
-        Config::default(),
-    )
-    .unwrap();
+    SimpleLogger::init(args.debug, Config::default()).unwrap();
 
     let socket = UdpSocket::bind((BIND_ADDR, args.port)).unwrap();
     let sender_socket = socket.try_clone().unwrap();
