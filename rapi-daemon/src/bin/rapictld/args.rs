@@ -4,11 +4,6 @@ use rapi::*; // import some consts
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Args {
-    /// Duration (ms) between suspending and resuming job.
-    /// If timeslice < 0, turn off job switching.
-    #[arg(short = 't', long, required = true)]
-    pub _timeslice: i64,
-
     /// Port to bind
     #[arg(short = 'p', long, default_value_t = DEFAULT_RAPICTLD_PORT)]
     pub port: u16,
