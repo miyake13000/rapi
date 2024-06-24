@@ -2,14 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::ffi::c_int;
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Request {
     pub req: ReqType,
     pub pid: c_int,
 }
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum ReqType {
     Unregister = 0,
     Register = 1,
