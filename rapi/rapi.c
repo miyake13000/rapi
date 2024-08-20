@@ -18,13 +18,14 @@ double calc_elapsed_time(struct timespec start, struct timespec end) {
     return timespec_to_sec(end.tv_sec - start.tv_sec, end.tv_nsec - start.tv_nsec);
 }
 
+pid_t pid;
+
 // Count up the number of reveived SIGCONT
 volatile sig_atomic_t num_sigcont = 0;
 void sigcont_handler(int signum) { num_sigcont += 1; }
 
 int MPI_Init(int *argc, char ***argv) {
     int ret;
-    pid_t pid;
     int fd;
 
     pid = getpid();
@@ -82,7 +83,6 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
 
 int MPI_Finalize() {
     int ret;
-    pid_t pid;
     int fd;
 
     int rank;
@@ -94,7 +94,6 @@ int MPI_Finalize() {
     printf("%d, %f, %f, %d\n", rank, calc_elapsed_time(rt1, rt6),
            calc_elapsed_time(ct1, ct6), num_sigcont);
 
-    pid = getpid();
     fd = create_udp_socket();
     if (fd == -1) {
         fprintf(stderr, "RAPI ERROR: creating or binding socket failed\n");
@@ -117,10 +116,10 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_COMM_BEGIN, .pid = pid});
     ret = PMPI_Send(buf, count, datatype, dest, tag, comm);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_END, .pid = 0});
+                      (struct Request){.t = REQ_COMM_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -133,10 +132,10 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_COMM_BEGIN, .pid = pid});
     ret = PMPI_Recv(buf, count, datatype, source, tag, comm, status);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_END, .pid = 0});
+                      (struct Request){.t = REQ_COMM_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -150,11 +149,11 @@ int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype, int 
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_COMM_BEGIN, .pid = pid});
     ret = PMPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag, recvbuf, recvcount,
                         recvtype, source, recvtag, comm, status);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_END, .pid = 0});
+                      (struct Request){.t = REQ_COMM_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -167,10 +166,10 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_COMM_BEGIN, .pid = pid});
     ret = PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_END, .pid = 0});
+                      (struct Request){.t = REQ_COMM_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -182,10 +181,10 @@ int MPI_Wait(MPI_Request *request, MPI_Status *status) {
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_WAIT_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_WAIT_BEGIN, .pid = pid});
     ret = PMPI_Wait(request, status);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_WAIT_END, .pid = 0});
+                      (struct Request){.t = REQ_WAIT_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -198,10 +197,10 @@ int MPI_Waitall(int count, MPI_Request array_of_requests[],
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_WAIT_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_WAIT_BEGIN, .pid = pid});
     ret = PMPI_Waitall(count, array_of_requests, array_of_statuses);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_WAIT_END, .pid = 0});
+                      (struct Request){.t = REQ_WAIT_END, .pid = pid});
     close(fd);
 
     return ret;
@@ -214,10 +213,10 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
 
     fd = create_udp_socket();
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_BEGIN, .pid = 0});
+                      (struct Request){.t = REQ_COMM_BEGIN, .pid = pid});
     ret = PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
     send_req_to_rapid(fd, htonl(INADDR_LOOPBACK), get_rapid_port(),
-                      (struct Request){.t = REQ_COMM_END, .pid = 0});
+                      (struct Request){.t = REQ_COMM_END, .pid = pid});
     close(fd);
 
     return ret;
