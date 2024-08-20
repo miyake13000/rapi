@@ -29,14 +29,15 @@ fn main() -> Result<(), ()> {
         let data: Request = bincode::deserialize(&buf).unwrap();
         debug!("Recv request: {:?}", data);
 
-        stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
-        debug!("Send request: {:?}", data);
-
         match data.req_type {
             ReqType::Initialize => {
+                stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
+                debug!("Send request: {:?}", data);
                 queue.push(data.pid);
             }
             ReqType::Finalize => {
+                stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
+                debug!("Send request: {:?}", data);
                 let pos = queue.iter().position(|e| *e == data.pid).unwrap();
                 queue.remove(pos);
             }
@@ -48,8 +49,14 @@ fn main() -> Result<(), ()> {
                 let signal = Signal::SIGCONT;
                 send_signal(&queue, signal).unwrap();
             }
-            ReqType::CommBegin | ReqType::CommEnd => {}
-            ReqType::WaitBegin | ReqType::WaitEnd => {}
+            ReqType::CommBegin | ReqType::CommEnd => {
+                stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
+                debug!("Send request: {:?}", data);
+            }
+            ReqType::WaitBegin | ReqType::WaitEnd => {
+                stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
+                debug!("Send request: {:?}", data);
+            }
         };
     }
 }
