@@ -96,7 +96,7 @@ fn main() {
             if !job.read().unwrap().is_running() {
                 break 'job_loop;
             } else if strategy.should_start_job(job.clone()) {
-                debug!("Start job");
+                debug!("Resume job");
                 break;
             } else {
                 trace!("Polling job starting");
@@ -113,7 +113,7 @@ fn send_req_to_all(connections: &mut Vec<(usize, Connection)>, req: Request) -> 
     for connection in connections {
         connection.1.send_req(&req)?;
     }
-    debug!("Send request to all rapid: {:?}", req);
+    trace!("Send request to all rapid: {:?}", req);
     Ok(())
 }
 
@@ -126,7 +126,7 @@ fn treat_msg(
     debug!("Start thread");
     loop {
         let msg = connection.recv_req().unwrap();
-        debug!("Recv request: {:?}", msg);
+        trace!("Recv request: {:?}", msg);
         match msg.req_type {
             ReqType::Initialize => {
                 let mut job = job.write().unwrap();
