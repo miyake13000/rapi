@@ -31,15 +31,13 @@ fn main() {
     let args = Args::parse();
     SimpleLogger::init(args.debug, Config::default()).unwrap();
 
-    let mut connections: Vec<(usize, Connection)> = args
-        .rapid_addrs
-        .into_iter()
-        .enumerate()
-        .map(|(i, addr)| {
-            let c = Connection::new((BIND_ADDR, args.port), addr, args.rapid_port).unwrap();
-            (i, c)
-        })
-        .collect();
+    let mut connections: Vec<(usize, Connection)> = Vec::new();
+    for (i, addr) in args.rapid_addrs.iter().enumerate() {
+        let port = args.port + i as u16;
+        info!("Connect '{}' rapid to {} port", addr, port);
+        let c = Connection::new((BIND_ADDR, port), addr, args.rapid_port).unwrap();
+        connections.push((i, c));
+    }
 
     let mut strategy: Box<dyn Strategy> = match args.strategy {
         args::Strategy::Fixed(args) => {
@@ -75,30 +73,28 @@ fn main() {
     drop(recver);
     strategy.job_starts();
 
-    loop {
-        'job_loop: loop {
-            loop {
-                if job.read().unwrap().is_running() {
-                    break 'job_loop;
-                } else if strategy.should_stop_job(job.clone()) {
-                    break;
-                } else {
-                    sleep(POLLING_INTERVAL);
-                }
+    'job_loop: loop {
+        loop {
+            if job.read().unwrap().is_running() {
+                break 'job_loop;
+            } else if strategy.should_stop_job(job.clone()) {
+                break;
+            } else {
+                sleep(POLLING_INTERVAL);
             }
-            send_req_to_all(&mut connections, REQ_STOP).unwrap();
-
-            loop {
-                if job.read().unwrap().is_running() {
-                    break 'job_loop;
-                } else if strategy.should_start_job(job.clone()) {
-                    break;
-                } else {
-                    sleep(POLLING_INTERVAL);
-                }
-            }
-            send_req_to_all(&mut connections, REQ_CONT).unwrap();
         }
+        send_req_to_all(&mut connections, REQ_STOP).unwrap();
+
+        loop {
+            if job.read().unwrap().is_running() {
+                break 'job_loop;
+            } else if strategy.should_start_job(job.clone()) {
+                break;
+            } else {
+                sleep(POLLING_INTERVAL);
+            }
+        }
+        send_req_to_all(&mut connections, REQ_CONT).unwrap();
     }
 }
 
