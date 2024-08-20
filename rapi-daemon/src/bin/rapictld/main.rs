@@ -1,138 +1,163 @@
 mod args;
+mod job;
+mod strategy;
 
 use args::Args;
 use clap::Parser;
-use log::debug;
-use rapi::{
-    req::{ReqType, Request},
-    *, // import some consts
-};
+use job::{Job, ProcessStatus};
+use log::*;
+use rapi::net::Connection;
+use rapi::req::{ReqType, Request};
+use rapi::*;
 use simplelog::{Config, SimpleLogger};
-use std::{
-    mem::size_of,
-    net::UdpSocket,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-    thread,
-    thread::sleep,
-    time::{Duration, Instant},
+use std::io;
+use std::mem::drop;
+use std::sync::{mpsc, Arc, RwLock};
+use std::thread::{self, sleep};
+use std::time::Duration;
+use strategy::Strategy;
+
+const POLLING_INTERVAL: Duration = Duration::from_millis(1);
+const REQ_CONT: Request = Request {
+    req_type: ReqType::Cont,
+    pid: 0,
 };
-
-const TIMESLICE_IN_COMM: Duration = Duration::from_millis(100);
-const TIMESLICE_GUARANTEED: Duration = Duration::from_millis(400);
-const TIMESLICE_CHECK_INTERVAL: Duration = Duration::from_millis(1);
-
-const BUF_SIZE: usize = size_of::<Request>();
-
-#[allow(dead_code)]
-const FIRST_REQ: Request = Request {
-    req: ReqType::Stop,
+const REQ_STOP: Request = Request {
+    req_type: ReqType::Stop,
     pid: 0,
 };
 
 fn main() {
     let args = Args::parse();
-    let count_in_communication = Arc::new(AtomicU32::new(0));
     SimpleLogger::init(args.debug, Config::default()).unwrap();
 
-    let socket = UdpSocket::bind((BIND_ADDR, args.port)).unwrap();
-    let sender_socket = socket.try_clone().unwrap();
-    {
-        let count_in_communication = Arc::clone(&count_in_communication);
-        thread::spawn(move || {
-            recv_req_loop(socket, &count_in_communication).unwrap();
-        });
+    let mut connections: Vec<(usize, Connection)> = args
+        .rapid_addrs
+        .into_iter()
+        .enumerate()
+        .map(|(i, addr)| {
+            let c = Connection::new((BIND_ADDR, args.port), addr, args.rapid_port).unwrap();
+            (i, c)
+        })
+        .collect();
+
+    let mut strategy: Box<dyn Strategy> = match args.strategy {
+        args::Strategy::Fixed(args) => {
+            let dur = Duration::from_millis(args.timeslice);
+            Box::new(strategy::FixedTimeslice::new(dur))
+        }
+        args::Strategy::CommFocused(args) => {
+            let ts_min = Duration::from_millis(args.timeslice_min);
+            let ts_max = Duration::from_millis(args.timeslice_max);
+            Box::new(strategy::CommFocused::new(ts_min, ts_max))
+        }
+        args::Strategy::WaitFocused(args) => {
+            let ts_min = Duration::from_millis(args.timeslice_min);
+            let ts_max = Duration::from_millis(args.timeslice_max);
+            Box::new(strategy::WaitFocused::new(ts_min, ts_max))
+        }
+    };
+
+    let job = Arc::new(RwLock::new(Job::new()));
+    let (sender, recver) = mpsc::channel::<()>();
+
+    // Create threads to receive message
+    for connection in connections.iter() {
+        let job = job.clone();
+        let dest_id = connection.0;
+        let connection = connection.1.try_clone().unwrap();
+        let sender = sender.clone();
+        thread::spawn(move || treat_msg(connection, dest_id, job, sender));
     }
 
-    let mut is_job_running = true;
-    let mut instant = Instant::now();
-    loop {
-        let elapsed = instant.elapsed();
+    // Block until job is initialized
+    recver.recv().unwrap();
+    drop(recver);
+    strategy.job_starts();
 
-        if is_job_running {
-            if elapsed >= TIMESLICE_GUARANTEED
-                || count_in_communication.load(Ordering::Relaxed) > 0
-                    && elapsed >= TIMESLICE_IN_COMM
-            {
-                let stop_req = Request {
-                    req: ReqType::Stop,
-                    pid: 0,
-                };
-                send_req(
-                    &sender_socket,
-                    &stop_req,
-                    &args.rapid_addrs,
-                    args.rapid_port,
-                )
-                .unwrap();
-                is_job_running = false;
-                instant = Instant::now();
+    loop {
+        'job_loop: loop {
+            loop {
+                if job.read().unwrap().is_running() {
+                    break 'job_loop;
+                } else if strategy.should_stop_job(job.clone()) {
+                    break;
+                } else {
+                    sleep(POLLING_INTERVAL);
+                }
             }
-        } else {
-            #[warn(clippy::collapsible_else_if)]
-            if elapsed >= TIMESLICE_IN_COMM {
-                let cont_req = Request {
-                    req: ReqType::Cont,
-                    pid: 0,
-                };
-                send_req(
-                    &sender_socket,
-                    &cont_req,
-                    &args.rapid_addrs,
-                    args.rapid_port,
-                )
-                .unwrap();
-                is_job_running = true;
-                instant = Instant::now();
+            send_req_to_all(&mut connections, REQ_STOP).unwrap();
+
+            loop {
+                if job.read().unwrap().is_running() {
+                    break 'job_loop;
+                } else if strategy.should_start_job(job.clone()) {
+                    break;
+                } else {
+                    sleep(POLLING_INTERVAL);
+                }
             }
+            send_req_to_all(&mut connections, REQ_CONT).unwrap();
         }
-        sleep(TIMESLICE_CHECK_INTERVAL);
     }
 }
 
-fn send_req(
-    socket: &UdpSocket,
-    req: &Request,
-    addrs: &[String],
-    port: u16,
-) -> Result<(), std::io::Error> {
-    let buf = bincode::serialize(&req).unwrap();
-    for addr in addrs.iter() {
-        socket.send_to(&buf, (addr.as_str(), port))?;
-        debug!("Send request: {:?} to: {}", req, addr);
+fn send_req_to_all(connections: &mut Vec<(usize, Connection)>, req: Request) -> io::Result<()> {
+    for connection in connections {
+        connection.1.send_req(&req)?;
     }
     Ok(())
 }
 
-fn recv_req_loop(
-    socket: UdpSocket,
-    count_in_communication: &AtomicU32,
-) -> Result<(), std::io::Error> {
-    let mut buf: [u8; BUF_SIZE] = [0; BUF_SIZE];
+fn treat_msg(
+    mut connection: Connection,
+    dest_id: usize,
+    job: Arc<RwLock<Job>>,
+    sender: mpsc::Sender<()>,
+) {
     loop {
-        socket.recv(&mut buf)?;
-        let req: Request = bincode::deserialize(&buf).unwrap();
-        match req.req {
+        let msg = connection.recv_req().unwrap();
+        match msg.req_type {
+            ReqType::Initialize => {
+                let mut job = job.write().unwrap();
+                job.append(dest_id, msg.pid.try_into().unwrap());
+                let _res = sender.send(());
+            }
+            ReqType::Finalize => {
+                let mut job = job.write().unwrap();
+                job.remove(dest_id, msg.pid.try_into().unwrap());
+            }
             ReqType::CommBegin => {
-                count_in_communication.fetch_add(1, Ordering::Relaxed);
+                let mut job = job.write().unwrap();
+                job.change_state(
+                    dest_id,
+                    msg.pid.try_into().unwrap(),
+                    ProcessStatus::Communicating,
+                );
             }
             ReqType::CommEnd => {
-                count_in_communication.fetch_sub(1, Ordering::Relaxed);
+                let mut job = job.write().unwrap();
+                job.change_state(
+                    dest_id,
+                    msg.pid.try_into().unwrap(),
+                    ProcessStatus::Calculating,
+                );
             }
-            _ => {}
+            ReqType::WaitBegin => {
+                let mut job = job.write().unwrap();
+                job.change_state(dest_id, msg.pid.try_into().unwrap(), ProcessStatus::Waiting);
+            }
+            ReqType::WaitEnd => {
+                let mut job = job.write().unwrap();
+                job.change_state(
+                    dest_id,
+                    msg.pid.try_into().unwrap(),
+                    ProcessStatus::Calculating,
+                );
+            }
+            _ => {
+                warn!("Unexpected Message: {:?}", msg);
+            }
         };
-        debug!("Receive request: {:?}", req);
     }
-}
-
-#[allow(dead_code)]
-fn reverse_request(data: &mut Request) -> Result<(), ()> {
-    match data.req {
-        ReqType::Stop => data.req = ReqType::Cont,
-        ReqType::Cont => data.req = ReqType::Stop,
-        _ => return Err(()),
-    }
-    Ok(())
 }

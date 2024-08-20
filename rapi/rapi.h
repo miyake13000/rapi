@@ -10,12 +10,14 @@
 #define RAPID_DEFAULT_PORT 8210
 
 enum RequestType {
-    REQ_UNREGISTER = 0,
-    REQ_REGISTER = 1,
+    REQ_INIT = 0,
+    REQ_FINAL = 1,
     REQ_STOP = 2,
     REQ_CONT = 3,
-    REQ_BEGIN_COMM = 4,
-    REQ_END_COMM = 5,
+    REQ_COMM_BEGIN = 4,
+    REQ_COMM_END = 5,
+    REQ_WAIT_BEGIN = 6,
+    REQ_WAIT_END = 7,
 };
 
 struct Request {

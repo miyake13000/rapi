@@ -21,4 +21,40 @@ pub struct Args {
     /// Debug level (One of [Error, Warn, Info, Debug, Trace, Off])
     #[arg(short = 'd', long, default_value_t = DEFAULT_DLEVEL)]
     pub debug: LevelFilter,
+
+    /// Strategy to manage a job
+    #[command(subcommand)]
+    pub strategy: Strategy,
+}
+
+#[derive(Parser, Debug)]
+pub enum Strategy {
+    /// Manage the job ignoring job's properties and running state
+    Fixed(FixedArgs),
+
+    /// Manage the job by whether job is communicating or not
+    CommFocused(FlexibleArgs),
+
+    /// Manage the job by whether job is waiting or not
+    WaitFocused(FlexibleArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct FixedArgs {
+    /// Interval (ms) for which the job is allowed to run
+    ///
+    /// If timeslice = 0, the job is not switched
+    #[arg(short, long)]
+    pub timeslice: u64,
+}
+
+#[derive(Parser, Debug)]
+pub struct FlexibleArgs {
+    /// Time (ms) which the job is guaranteed to keep running
+    #[arg(short, long)]
+    pub timeslice_min: u64,
+
+    /// Time (ms) that the job must be stopped
+    #[arg(short = 'T', long)]
+    pub timeslice_max: u64,
 }

@@ -32,11 +32,11 @@ fn main() -> Result<(), ()> {
         stream.send_to(&buf, args.rapictld_socket_addr()).unwrap();
         debug!("Send request: {:?}", data);
 
-        match data.req {
-            ReqType::Register => {
+        match data.req_type {
+            ReqType::Initialize => {
                 queue.push(data.pid);
             }
-            ReqType::Unregister => {
+            ReqType::Finalize => {
                 let pos = queue.iter().position(|e| *e == data.pid).unwrap();
                 queue.remove(pos);
             }
@@ -49,6 +49,7 @@ fn main() -> Result<(), ()> {
                 send_signal(&queue, signal).unwrap();
             }
             ReqType::CommBegin | ReqType::CommEnd => {}
+            ReqType::WaitBegin | ReqType::WaitEnd => {}
         };
     }
 }

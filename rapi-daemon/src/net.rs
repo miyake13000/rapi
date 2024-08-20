@@ -7,17 +7,17 @@ use std::net::UdpSocket;
 pub const BUF_SIZE: usize = size_of::<Request>();
 
 #[derive(Debug)]
-pub struct Client {
+pub struct Connection {
     socket: UdpSocket,
-    dest_addrs: Vec<String>,
+    dest_addr: String,
     dest_port: u16,
 }
 
-impl Client {
-    pub fn new<T: ToSocketAddrs>(addr: T, dest_addrs: Vec<String>, dest_port: u16) -> Result<Self> {
+impl Connection {
+    pub fn new<T: ToSocketAddrs>(addr: T, dest_addr: String, dest_port: u16) -> Result<Self> {
         Ok(Self {
             socket: UdpSocket::bind(addr)?,
-            dest_addrs,
+            dest_addr,
             dest_port,
         })
     }
@@ -30,10 +30,9 @@ impl Client {
     }
 
     pub fn send_req(&mut self, req: &Request) -> Result<()> {
-        for dest in self.dest_addrs.iter() {
-            let buf = bincode::serialize(&req).unwrap();
-            self.socket.send_to(&buf, (dest.as_str(), self.dest_port))?;
-        }
+        let buf = bincode::serialize(&req).unwrap();
+        self.socket
+            .send_to(&buf, (self.dest_addr.as_str(), self.dest_port))?;
         Ok(())
     }
 
@@ -41,7 +40,7 @@ impl Client {
         let new_socket = self.socket.try_clone()?;
         Ok(Self {
             socket: new_socket,
-            dest_addrs: self.dest_addrs.clone(),
+            dest_addr: self.dest_addr.clone(),
             dest_port: self.dest_port,
         })
     }
