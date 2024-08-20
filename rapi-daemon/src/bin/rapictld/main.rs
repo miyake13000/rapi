@@ -30,28 +30,32 @@ const REQ_STOP: Request = Request {
 fn main() {
     let args = Args::parse();
     SimpleLogger::init(args.debug, Config::default()).unwrap();
+    debug!("{:?}", args);
 
     let mut connections: Vec<(usize, Connection)> = Vec::new();
     for (i, addr) in args.rapid_addrs.iter().enumerate() {
         let port = args.port + i as u16;
-        info!("Connect '{}' rapid to {} port", addr, port);
         let c = Connection::new((BIND_ADDR, port), addr, args.rapid_port).unwrap();
+        info!("Connected rapid: '{}' port: {}", addr, port);
         connections.push((i, c));
     }
 
     let mut strategy: Box<dyn Strategy> = match args.strategy {
         args::Strategy::Fixed(args) => {
             let dur = Duration::from_millis(args.timeslice);
+            info!("Use strategy: FixedTimeslice");
             Box::new(strategy::FixedTimeslice::new(dur))
         }
         args::Strategy::CommFocused(args) => {
             let ts_min = Duration::from_millis(args.timeslice_min);
             let ts_max = Duration::from_millis(args.timeslice_max);
+            info!("Use strategy: CommFocused");
             Box::new(strategy::CommFocused::new(ts_min, ts_max))
         }
         args::Strategy::WaitFocused(args) => {
             let ts_min = Duration::from_millis(args.timeslice_min);
             let ts_max = Duration::from_millis(args.timeslice_max);
+            info!("Use strategy: WaitFocused");
             Box::new(strategy::WaitFocused::new(ts_min, ts_max))
         }
     };
@@ -72,14 +76,17 @@ fn main() {
     recver.recv().unwrap();
     drop(recver);
     strategy.job_starts();
+    info!("Job starts");
 
     'job_loop: loop {
         loop {
             if job.read().unwrap().is_running() {
                 break 'job_loop;
             } else if strategy.should_stop_job(job.clone()) {
+                debug!("Stop job");
                 break;
             } else {
+                trace!("Polling job stopping");
                 sleep(POLLING_INTERVAL);
             }
         }
@@ -89,19 +96,24 @@ fn main() {
             if job.read().unwrap().is_running() {
                 break 'job_loop;
             } else if strategy.should_start_job(job.clone()) {
+                debug!("Start job");
                 break;
             } else {
+                trace!("Polling job starting");
                 sleep(POLLING_INTERVAL);
             }
         }
         send_req_to_all(&mut connections, REQ_CONT).unwrap();
     }
+
+    info!("Job ends");
 }
 
 fn send_req_to_all(connections: &mut Vec<(usize, Connection)>, req: Request) -> io::Result<()> {
     for connection in connections {
         connection.1.send_req(&req)?;
     }
+    debug!("Send request to all rapid: {:?}", req);
     Ok(())
 }
 
@@ -111,8 +123,10 @@ fn treat_msg(
     job: Arc<RwLock<Job>>,
     sender: mpsc::Sender<()>,
 ) {
+    debug!("Start thread");
     loop {
         let msg = connection.recv_req().unwrap();
+        debug!("Recv request: {:?}", msg);
         match msg.req_type {
             ReqType::Initialize => {
                 let mut job = job.write().unwrap();
