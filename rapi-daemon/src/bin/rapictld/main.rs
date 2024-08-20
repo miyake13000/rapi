@@ -80,7 +80,7 @@ fn main() {
 
     'job_loop: loop {
         loop {
-            if job.read().unwrap().is_running() {
+            if !job.read().unwrap().is_running() {
                 break 'job_loop;
             } else if strategy.should_stop_job(job.clone()) {
                 debug!("Stop job");
@@ -93,7 +93,7 @@ fn main() {
         send_req_to_all(&mut connections, REQ_STOP).unwrap();
 
         loop {
-            if job.read().unwrap().is_running() {
+            if !job.read().unwrap().is_running() {
                 break 'job_loop;
             } else if strategy.should_start_job(job.clone()) {
                 debug!("Start job");
