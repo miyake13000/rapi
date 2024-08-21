@@ -7,6 +7,7 @@
 #include <time.h>
 struct timespec ct1, ct6;
 struct timespec rt1, rt6;
+pid_t pid;
 
 double nsec_to_sec(time_t nsec) { return (double)nsec / (1000 * 1000 * 1000); }
 
@@ -18,7 +19,6 @@ double calc_elapsed_time(struct timespec start, struct timespec end) {
     return timespec_to_sec(end.tv_sec - start.tv_sec, end.tv_nsec - start.tv_nsec);
 }
 
-pid_t pid;
 
 // Count up the number of reveived SIGCONT
 volatile sig_atomic_t num_sigcont = 0;
@@ -54,7 +54,6 @@ int MPI_Init(int *argc, char ***argv) {
 
 int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
     int ret;
-    pid_t pid;
     int fd;
 
     pid = getpid();
