@@ -17,7 +17,6 @@ use std::thread::{self, sleep};
 use std::time::Duration;
 use strategy::Strategy;
 
-const POLLING_INTERVAL: Duration = Duration::from_millis(1);
 const REQ_CONT: Request = Request {
     req_type: ReqType::Cont,
     pid: 0,
@@ -49,14 +48,16 @@ fn main() {
         args::Strategy::CommFocused(args) => {
             let ts_min = Duration::from_millis(args.timeslice_min);
             let ts_max = Duration::from_millis(args.timeslice_max);
+            let sleep_time = Duration::from_millis(args.sleep_time);
             info!("Use strategy: CommFocused");
-            Box::new(strategy::CommFocused::new(ts_min, ts_max))
+            Box::new(strategy::CommFocused::new(ts_min, ts_max, sleep_time))
         }
         args::Strategy::WaitFocused(args) => {
             let ts_min = Duration::from_millis(args.timeslice_min);
             let ts_max = Duration::from_millis(args.timeslice_max);
+            let sleep_time = Duration::from_millis(args.sleep_time);
             info!("Use strategy: WaitFocused");
-            Box::new(strategy::WaitFocused::new(ts_min, ts_max))
+            Box::new(strategy::WaitFocused::new(ts_min, ts_max, sleep_time))
         }
     };
 
@@ -71,6 +72,8 @@ fn main() {
         let sender = sender.clone();
         thread::spawn(move || treat_msg(connection, dest_id, job, sender));
     }
+
+    let polling_interval = Duration::from_micros(args.polling_interval);
 
     // Block until job is initialized
     recver.recv().unwrap();
@@ -87,7 +90,7 @@ fn main() {
                 break;
             } else {
                 trace!("Polling job stopping");
-                sleep(POLLING_INTERVAL);
+                sleep(polling_interval);
             }
         }
         send_req_to_all(&mut connections, REQ_STOP).unwrap();
@@ -100,7 +103,7 @@ fn main() {
                 break;
             } else {
                 trace!("Polling job starting");
-                sleep(POLLING_INTERVAL);
+                sleep(polling_interval);
             }
         }
         send_req_to_all(&mut connections, REQ_CONT).unwrap();

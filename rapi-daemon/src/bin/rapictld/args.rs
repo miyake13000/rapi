@@ -22,6 +22,10 @@ pub struct Args {
     #[arg(short = 'd', long, default_value_t = DEFAULT_DLEVEL)]
     pub debug: LevelFilter,
 
+    /// Interval (us) to check job's status
+    #[arg(short = 'i', long, default_value_t = DEFAULT_POLLING_INTERVAL)]
+    pub polling_interval: u64,
+
     /// Strategy to manage a job
     #[command(subcommand)]
     pub strategy: Strategy,
@@ -57,4 +61,8 @@ pub struct FlexibleArgs {
     /// Time (ms) that the job must be stopped
     #[arg(short = 'T', long)]
     pub timeslice_max: u64,
+
+    /// Time (ms) between job stopping and job starting
+    #[arg(short, long)]
+    pub sleep_time: u64,
 }
