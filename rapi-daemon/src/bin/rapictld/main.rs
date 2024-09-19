@@ -50,14 +50,24 @@ fn main() {
             let ts_max = Duration::from_millis(args.timeslice_max);
             let sleep_time = Duration::from_millis(args.sleep_time);
             info!("Use strategy: CommFocused");
-            Box::new(strategy::CommFocused::new(ts_min, ts_max, sleep_time))
+            Box::new(strategy::CommFocused::new(
+                ts_min,
+                ts_max,
+                sleep_time,
+                args.threshold_rate,
+            ))
         }
         args::Strategy::WaitFocused(args) => {
             let ts_min = Duration::from_millis(args.timeslice_min);
             let ts_max = Duration::from_millis(args.timeslice_max);
             let sleep_time = Duration::from_millis(args.sleep_time);
             info!("Use strategy: WaitFocused");
-            Box::new(strategy::WaitFocused::new(ts_min, ts_max, sleep_time))
+            Box::new(strategy::WaitFocused::new(
+                ts_min,
+                ts_max,
+                sleep_time,
+                args.threshold_rate,
+            ))
         }
     };
 

@@ -65,4 +65,11 @@ pub struct FlexibleArgs {
     /// Time (ms) between job stopping and job starting
     #[arg(short, long)]
     pub sleep_time: u64,
+
+    /// Job switching threshold rate (%) (0~100)
+    ///
+    /// Ex: 50% means that the job is switched
+    /// when the 50% process of the job is communicating or waiting
+    #[arg(short = 'r', long)]
+    pub threshold_rate: f64,
 }
