@@ -56,6 +56,7 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
     // Initialize variables
     pid = getpid();
     fd = create_udp_socket();
+    is_initialized = 1;
 
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ct);
     clock_gettime(CLOCK_REALTIME, &start_rt);
